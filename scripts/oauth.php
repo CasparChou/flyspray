@@ -146,28 +146,38 @@ if (isset($_SESSION['oauth_token'])) {
         throw new Exception($e->getMessage());
     }
 }
-
-$user_details = $obj->getUserDetails($token);
-$uid          = $user_details->uid;
+if( $provider == 'google' ){
+    $user_details = $obj->getResourceOwner($token);
+    $uid 	  = $user_details->getId();
+} else {
+    $user_details = $obj->getUserDetails($token);
+    $uid          = $user_details->uid;
+}
 
 if (Post::has('username')) {
     $username = Post::val('username');
 } else {
-    $username = $user_details->nickname;
+    $username = ( $provider == 'google' )?$user_details->getName():$user_details->nickname;
 }
 
+$email = ( $provider == 'google' )?$user_details->getEmail():$user_details->email;
 // First time logging in
 if (! Flyspray::checkForOauthUser($uid, $provider)) {
-    if (! $user_details->email) {
-        Flyspray::show_error(27);
+    if  ( $provider == 'google' ){
+        if (! $user_details->getEmail()) {
+            Flyspray::show_error(27);
+        }
+    } else {
+        if (! $user_details->email) {
+            Flyspray::show_error(27);
+        }
     }
-
     $success = false;
 
     if ($username) {
         $group_in = $fs->prefs['anon_group'];
-        $name     = $user_details->name ?: $username;
-        $success  = Backend::create_user($username, null, $name, '', $user_details->email, 0, 0, $group_in, 1, $uid, $provider);
+        $name     = ( $provider == 'google' )?$user_details->getName():($user_details->name ?: $username);
+        $success  = Backend::create_user($username, null, $name, '', $email, 0, 0, $group_in, 1, $uid, $provider);
     }
 
     // username taken or not provided, ask for it
@@ -181,7 +191,7 @@ if (! Flyspray::checkForOauthUser($uid, $provider)) {
     }
 }
 
-if (($user_id = Flyspray::checkLogin($user_details->email, null, 'oauth')) < 1) {
+if (($user_id = Flyspray::checkLogin($email, null, 'oauth')) < 1) {
     Flyspray::show_error(23); // account disabled
 }
 
